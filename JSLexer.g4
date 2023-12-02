@@ -1,6 +1,12 @@
 lexer grammar JSLexer;
 
-channels { ERROR }
+channels {
+    ERROR
+}
+
+options {
+    superClass = JavaScriptLexerBase;
+}
 
 MultiLineComment:               '/*' .*? '*/'             -> channel(HIDDEN);
 SingleLineComment:              '//' ~[\r\n]* -> channel(HIDDEN);
@@ -9,8 +15,9 @@ OpenBracket:                    '[';
 CloseBracket:                   ']';
 OpenParen:                      '(';
 CloseParen:                     ')';
-OpenBrace:                      '{';
-CloseBrace:                     '}';
+OpenBrace                  : '{' {this.ProcessOpenBrace();};
+TemplateCloseBrace         :     {this.IsInTemplateString()}? '}' -> popMode;
+CloseBrace                 : '}' {this.ProcessCloseBrace();};
 SemiColon:                      ';';
 Comma:                          ',';
 Assign:                         '=';
@@ -33,7 +40,7 @@ LessThan:                       '<';
 MoreThan:                       '>';
 LessThanEquals:                 '<=';
 GreaterThanEquals:              '>=';
-Equals:                        '==';
+Equals_:                        '==';
 NotEquals:                      '!=';
 IdentityEquals:                 '===';
 IdentityNotEquals:              '!==';
@@ -80,7 +87,8 @@ Continue:                       'continue';
 For:                            'for';
 Switch:                         'switch';
 While:                          'while';
-Function:                       'function';
+Debugger   : 'debugger';
+Function_:                       'function';
 This:                           'this';
 Default:                        'default';
 If:                             'if';
@@ -104,18 +112,19 @@ Import:                         'import';
 /// The following tokens are also considered to be FutureReservedWords
 /// when parsing strict mode
 
-Let:                   'let';
-Static:                'static';
+StrictLet    : 'let'        {this.IsStrictMode()}?;
+NonStrictLet : 'let'        {!this.IsStrictMode()}?;
+Static       : 'static'     {this.IsStrictMode()}?;
 
 /// Identifier Names and Identifiers
 
-Identifier:                     IdentifierStart IdentifierPart*;
+Identifier: IdentifierStart IdentifierPart*;
 /// String Literals
-StringLiteral:                 ('"' DoubleStringCharacter* '"'
-             |                  '\'' SingleStringCharacter* '\'')
-             ;
+StringLiteral:
+    ('"' DoubleStringCharacter* '"' | '\'' SingleStringCharacter* '\'') {this.ProcessStringLiteral();}
+;
 
-BackTick:                       '`' -> pushMode(TEMPLATE);
+BackTick: '`' {this.IncreaseTemplateDepth();} -> pushMode(TEMPLATE);
 
 WhiteSpaces:                    [\t]+ -> channel(HIDDEN);
 
@@ -123,73 +132,39 @@ LineTerminator:                 [\r\n] -> channel(HIDDEN);
 
 /// Comments
 
-UnexpectedCharacter:            . -> channel(ERROR);
+UnexpectedCharacter : .                     -> channel(ERROR);
 
 mode TEMPLATE;
 
-BackTickInside:                 '`' -> type(BackTick), popMode;
-TemplateStringStartExpression:  '${' -> pushMode(DEFAULT_MODE);
-TemplateStringAtom:             ~[`];
+BackTickInside                : '`'  {this.DecreaseTemplateDepth();} -> type(BackTick), popMode;
+TemplateStringStartExpression : '${' -> pushMode(DEFAULT_MODE);
+TemplateStringAtom            : ~[`];
 
 // Fragment rules
 
-fragment DoubleStringCharacter
-    : ~["\\\r\n]
-    | '\\' EscapeSequence
-    | LineContinuation
-    ;
+fragment DoubleStringCharacter: ~["\\\r\n] | '\\' EscapeSequence | LineContinuation;
 
-fragment SingleStringCharacter
-    : ~['\\\r\n]
-    | '\\' EscapeSequence
-    | LineContinuation
-    ;
+fragment SingleStringCharacter: ~['\\\r\n] | '\\' EscapeSequence | LineContinuation;
 
 fragment EscapeSequence
     : CharacterEscapeSequence
     | '0'
     ;
 
-fragment CharacterEscapeSequence
-    : SingleEscapeCharacter
-    | NonEscapeCharacter
-    ;
+fragment CharacterEscapeSequence: SingleEscapeCharacter | NonEscapeCharacter;
 
-fragment SingleEscapeCharacter
-    : ['"\\bfnrtv]
-    ;
+fragment SingleEscapeCharacter: ['"\\bfnrtv];
 
-fragment NonEscapeCharacter
-    : ~['"\\bfnrtv0-9xu\r\n]
-    ;
+fragment NonEscapeCharacter: ~['"\\bfnrtv0-9xu\r\n];
 
-fragment EscapeCharacter
-    : SingleEscapeCharacter
-    | [0-9]
-    | [xu]
-    ;
+fragment EscapeCharacter: SingleEscapeCharacter | [0-9] | [xu];
 
-fragment LineContinuation
-    : '\\' [\r\n]+
-    ;
+fragment LineContinuation: '\\' [\r\n]+;
 
-fragment DecimalIntegerLiteral
-    : '0'
-    | [1-9] [0-9_]*
-    ;
+fragment DecimalIntegerLiteral: '0' | [1-9] [0-9_]*;
 
-fragment ExponentPart
-    : [eE] [+-]? [0-9_]+
-    ;
+fragment ExponentPart: [eE] [+-]? [0-9_]+;
 
-fragment IdentifierPart
-    : IdentifierStart
-    | [\p{Mn}]
-    | [\p{Nd}]
-    | [\p{Pc}]
-    ;
+fragment IdentifierPart: IdentifierStart | [\p{Mn}] | [\p{Nd}] | [\p{Pc}];
 
-fragment IdentifierStart
-    : [\p{L}]
-    | [$_]
-    ;
+fragment IdentifierStart: [\p{L}] | [$_];
